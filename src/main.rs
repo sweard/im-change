@@ -1,58 +1,9 @@
 use rdev::Key::*;
 use rdev::{Event, EventType, Key, listen};
-use std::process::Command;
+use std::env::consts::OS;
+mod macos;
 
 const TARGET_IM: &str = "com.apple.inputmethod.SCIM.ITABC";
-
-fn switch_to_chinese_input() {
-    let applescript = r#"
-        tell application "System Events"
-            tell process "SystemUIServer"
-                key code 49 using {option down, control down}
-            end tell
-        end tell
-    "#;
-
-    let output = Command::new("osascript")
-        .arg("-e")
-        .arg(applescript)
-        .output()
-        .expect("failed to execute AppleScript");
-
-    if output.status.success() {
-        println!("✅ Switched to Chinese input method via AppleScript.");
-    } else {
-        eprintln!(
-            "❌ AppleScript failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-}
-
-fn get_input_method() -> String {
-    let output = Command::new("defaults")
-        .arg("read")
-        .arg("com.apple.HIToolbox")
-        .arg("AppleSelectedInputSources")
-        .output()
-        .expect("Failed to execute command");
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        println!("✅ 当前输入法信息：\n{}", stdout);
-        if stdout.contains(TARGET_IM) {
-            println!("当前是中文拼音输入法");
-            TARGET_IM.to_owned()
-        } else {
-            println!("当前不是中文拼音输入法");
-            String::new()
-        }
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        eprintln!("❌ 命令执行失败：{}", stderr);
-        String::new()
-    }
-}
 
 pub fn key_to_char(key: Key, shift: bool) -> Option<char> {
     let ch = match key {
@@ -120,16 +71,20 @@ pub fn key_to_char(key: Key, shift: bool) -> Option<char> {
 
 fn main() {
     println!("⌨️ 开始监听键盘事件...");
-
+    //
     let mut input_str: String = String::new();
     let targets = ["// ", "/* ", "/** "];
     let mut shift = false;
     let buffer_size = 10;
-
+    
     let callback = move |event: Event| {
         match event.event_type {
             EventType::KeyPress(key) => {
                 println!("键被按下： {:?}", key);
+                let mac_ignore = macos::ignore_input(key);
+                if mac_ignore {
+                    return;
+                }
                 if key == Key::ShiftLeft || key == Key::ShiftRight {
                     println!("Shift 键被按下");
                     shift = true;
@@ -139,20 +94,34 @@ fn main() {
                 } else if key == Key::Backspace {
                     input_str.pop();
                 } else if input_str.len() > buffer_size {
-                    input_str.remove(0);
+                    input_str = input_str[input_str.len() - buffer_size..].to_string();
                 } else {
                     println!("未处理按键： {:?}", key);
                 }
                 println!("Input string: {}", input_str);
                 if targets.iter().any(|t| input_str.ends_with(t)) {
                     println!("Detected {}. Switching input method...", input_str);
-                    let cur_method = get_input_method();
-                    if cur_method == TARGET_IM {
-                        println!("Already in Chinese input method.");
-                    } else {
-                        println!("Switching to Chinese input method...");
-                        switch_to_chinese_input();
-                        input_str.clear();
+                    match OS {
+                        "macos" => {
+                            println!("⌨️ 在macOS系统上开始处理输入法切换...");
+                            macos::switch_to_target_input(TARGET_IM);
+                        }
+                        "windows" => {
+                            println!("⌨️ 在Windows系统上开始处理输入法切换...");
+                            // Windows特定逻辑将来可以实现
+                            println!("Windows支持尚未实现");
+                            return;
+                        }
+                        "linux" => {
+                            println!("⌨️ 在Linux系统上开始处理输入法切换...");
+                            // Linux特定逻辑将来可以实现
+                            println!("Linux支持尚未实现");
+                            return;
+                        }
+                        _ => {
+                            println!("❌ 不支持的操作系统: {}", OS);
+                            return;
+                        }
                     }
                 }
             }

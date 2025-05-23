@@ -93,10 +93,12 @@ fn main() {
                     input_str.push(c);
                 } else if key == Key::Backspace {
                     input_str.pop();
-                } else if input_str.len() > buffer_size {
-                    input_str = input_str[input_str.len() - buffer_size..].to_string();
                 } else {
                     println!("未处理按键： {:?}", key);
+                }
+                // 限制记录字符串的长度
+                if input_str.len() > buffer_size {
+                    input_str = input_str[input_str.len() - buffer_size..].to_string();
                 }
                 println!("Input string: {}", input_str);
                 if targets.iter().any(|t| input_str.ends_with(t)) {
